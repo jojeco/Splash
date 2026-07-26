@@ -20,7 +20,15 @@
     "@babel/core": "^7.20.0"
   },
   "overrides": {
-    "brace-expansion": "5.0.8"
+    "brace-expansion": "5.0.8",
+    "@xmldom/xmldom": "0.9.10",
+    "fast-xml-parser": "5.10.1",
+    "ip": "2.0.1",
+    "postcss": "8.5.23",
+    "semver": "7.8.5",
+    "send": "1.2.1",
+    "tar": "7.5.22",
+    "uuid": "14.0.1"
   },
   "private": true
 }
