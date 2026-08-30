@@ -1,77 +1,58 @@
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Platform, Text, View, Button } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import React, { useEffect, useState } from 'react';
 
-
+import { getNext, getLabel } from './constants/orientation';
+import PhoneIndicator from './components/PhoneIndicator';
+import RotateButton from './components/RotateButton';
 
 export default function App() {
   const [orientation, setOrientation] = useState(ScreenOrientation.Orientation.PORTRAIT_UP);
+  const [locked, setLocked] = useState(false);
 
-  useEffect (()=> {
-    //get initial screen orientation
+  useEffect(() => {
+    // get initial screen orientation
     ScreenOrientation.getOrientationAsync().then((info) => {
       setOrientation(info);
-      console.log("Initial orientation:", info );
     });
-    //subscribe to future events
+    // subscribe to future events
     const subscription = ScreenOrientation.addOrientationChangeListener((evt) => {
       setOrientation(evt.orientationInfo.orientation);
-      console.log("Orientation changed:", evt.orientationInfo.orientation);
     });
-    //unsubscribe when component is unmounted
+    // unsubscribe when component is unmounted
     return () => {
       ScreenOrientation.removeOrientationChangeListener(subscription);
-
-    }
-  })
-
+    };
+  }, []);
 
   const rotate = () => {
-    let newOrientation = orientation;
-    let newOrientationLock = ScreenOrientation.OrientationLock.PORTRAIT_UP;
-    
-    switch (orientation) {
-      case ScreenOrientation.Orientation.PORTRAIT_UP:
-        newOrientation = ScreenOrientation.Orientation.LANDSCAPE_RIGHT;
-        newOrientationLock = ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT;
-        break;
-      case ScreenOrientation.Orientation.LANDSCAPE_RIGHT:
-        if (Platform.OS == 'ios') {
-          newOrientation = ScreenOrientation.Orientation.LANDSCAPE_LEFT;
-          newOrientationLock = ScreenOrientation.OrientationLock.LANDSCAPE_LEFT;
-       }
-        else {
-          newOrientation = ScreenOrientation.Orientation.PORTRAIT_DOWN;
-          newOrientationLock = ScreenOrientation.OrientationLock.PORTRAIT_DOWN;
-        }
-        break;
-      case ScreenOrientation.Orientation.PORTRAIT_DOWN:
-        newOrientation = ScreenOrientation.Orientation.LANDSCAPE_LEFT;
-        newOrientationLock = ScreenOrientation.OrientationLock.LANDSCAPE_LEFT;
-        break;
-      case ScreenOrientation.Orientation.LANDSCAPE_LEFT:
-        newOrientation = ScreenOrientation.Orientation.PORTRAIT_UP;
-        newOrientationLock = ScreenOrientation.OrientationLock.PORTRAIT_UP;
-        break;
-        default:
-          console.log("Unknown orientation()");
-          
-    }
-    setOrientation(newOrientation);
-    ScreenOrientation.lockAsync(newOrientationLock);
-  }
-  
-  
+    const { next, lock } = getNext(orientation);
+    setOrientation(next);
+    ScreenOrientation.lockAsync(lock).catch(() => {});
+    setLocked(true);
+  };
+
+  const unlock = () => {
+    ScreenOrientation.unlockAsync().catch(() => {});
+    setLocked(false);
+  };
+
   return (
     <View style={styles.container}>
-      <Text>Current orientation: {orientation}</Text>
-      <Button title="Rotate" onPress={rotate} />
+      <PhoneIndicator orientation={orientation} />
+      <Text style={styles.label}>{getLabel(orientation)}</Text>
+      <Text style={styles.code}>Orientation code: {orientation}</Text>
+      <RotateButton label="Rotate" onPress={rotate} variant="primary" />
+      <RotateButton
+        label={locked ? 'Unlock (follow device)' : 'Following device sensor'}
+        onPress={unlock}
+        disabled={!locked}
+        variant="secondary"
+      />
       <StatusBar style="auto" />
     </View>
   );
-
-  
 }
 
 const styles = StyleSheet.create({
@@ -80,5 +61,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#1da1f2',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 16,
+    padding: 20,
+  },
+  label: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#ffffff',
+    textAlign: 'center',
+  },
+  code: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.85)',
+    marginBottom: 8,
   },
 });

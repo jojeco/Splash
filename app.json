@@ -3,7 +3,7 @@
     "name": "Splash",
     "slug": "Splash",
     "version": "1.0.0",
-    "orientation": "DEFAULT",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
