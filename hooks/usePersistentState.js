@@ -32,7 +32,7 @@ export default function usePersistentState(key, defaultValue, { normalize } = {}
   }, [key]);
 
   const setValue = useCallback(
-    (next) => {
+    (next, { immediate = false } = {}) => {
       const resolved = typeof next === 'function' ? next(latest.current) : next;
       latest.current = resolved;
       touched.current = true;
@@ -40,7 +40,11 @@ export default function usePersistentState(key, defaultValue, { normalize } = {}
       if (!hydratedRef.current) return;
       dirty.current = true;
       clearTimeout(timer.current);
-      timer.current = setTimeout(flush, WRITE_DELAY_MS);
+      if (immediate) {
+        flush();
+      } else {
+        timer.current = setTimeout(flush, WRITE_DELAY_MS);
+      }
     },
     [flush]
   );

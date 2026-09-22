@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 
 import usePersistentState from './usePersistentState';
 import { STORAGE_KEYS } from '../lib/storage';
 import {
+  accumulateDwell,
   createStats,
   normalizeStats,
   recordOrientation,
@@ -20,6 +22,7 @@ export default function useRotationStats() {
   );
   const hydratedRef = useRef(false);
   const seededRef = useRef(false);
+  const [seeded, setSeeded] = useState(false);
 
   useEffect(() => {
     hydratedRef.current = hydrated;
@@ -37,6 +40,7 @@ export default function useRotationStats() {
     (orientation) => {
       if (!hydratedRef.current || seededRef.current) return;
       seededRef.current = true;
+      setSeeded(true);
       setStats((prev) => seedOrientation(prev, orientation, Date.now()));
     },
     [setStats]
@@ -47,5 +51,22 @@ export default function useRotationStats() {
     setStats((prev) => seedOrientation(createStats(), prev.currentOrientation, Date.now()));
   }, [setStats]);
 
-  return { stats, hydrated, storageError: error, record, seed, reset };
+  // Credits the still-running dwell span to storage immediately, so it is not
+  // lost if the app gets killed while backgrounded. No-op until we actually
+  // have a baseline to accumulate against.
+  const flushDwell = useCallback(() => {
+    if (!hydratedRef.current || !seededRef.current) return;
+    setStats((prev) => accumulateDwell(prev, Date.now()), { immediate: true });
+  }, [setStats]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') flushDwell();
+    });
+    return () => {
+      sub.remove();
+    };
+  }, [flushDwell]);
+
+  return { stats, hydrated, storageError: error, record, seed, reset, flushDwell, seeded };
 }

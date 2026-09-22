@@ -37,7 +37,7 @@ export default function App() {
     { normalize: normalizeSettings }
   );
   const { locked, showStats } = settings;
-  const { stats, hydrated: statsHydrated, storageError, record, seed, reset } = useRotationStats();
+  const { stats, hydrated: statsHydrated, storageError, record, seed, reset, seeded } = useRotationStats();
   const [orientationReady, setOrientationReady] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const orientationRef = useRef(orientation);
@@ -132,6 +132,7 @@ export default function App() {
         <StatsPanel
           stats={stats}
           now={now}
+          seeded={seeded}
           visible={showStats}
           onToggle={toggleStats}
           onReset={reset}

@@ -9,6 +9,8 @@ const {
   recordOrientation,
   accumulateDwell,
   summarize,
+  buildExportPayload,
+  exportStatsJSON,
   formatDuration,
 } = require('../lib/stats');
 
@@ -172,6 +174,72 @@ test('JSON round-trip keeps keys stable and is idempotent', () => {
   assert.deepStrictEqual(revived, stats);
   assert.deepStrictEqual(Object.keys(revived.byOrientation).sort(), ['1', '2', '4']);
   assert.deepStrictEqual(normalizeStats(revived), revived);
+});
+
+test('summarize(live=false) credits zero live span; live=true (default) still adds it', () => {
+  let stats = seeded(PORTRAIT_UP, 0);
+  stats = recordOrientation(stats, { orientation: LANDSCAPE_LEFT, at: 1000, source: 'sensor' });
+  const noLive = summarize(stats, 11000, false);
+  const noLiveExpected = summarize(stats, stats.currentSince);
+  assert.deepStrictEqual(noLive, noLiveExpected);
+  assert.strictEqual(noLive.totalMs, 1000, 'only the already-settled dwell should be counted');
+  const liveDefault = summarize(stats, 11000);
+  const liveExplicit = summarize(stats, 11000, true);
+  assert.deepStrictEqual(liveDefault, liveExplicit);
+  assert.strictEqual(liveDefault.totalMs, 11000, 'live=true (or omitted) must still add the running span');
+});
+
+test('accumulateDwell is safe to call twice in a row (iOS active->inactive->background)', () => {
+  const start = seeded(PORTRAIT_UP, 1000);
+  const once = accumulateDwell(start, 5000);
+  const twice = accumulateDwell(once, 5000 + 50);
+  assert.strictEqual(once.byOrientation['1'].totalMs, 4000);
+  assert.strictEqual(twice.byOrientation['1'].totalMs, 4050, 'the second call must only add the extra epsilon, never re-add the whole span');
+  assert.strictEqual(twice.currentSince, 5050);
+});
+
+test('dwell flushed at background survives a simulated app kill (JSON round-trip)', () => {
+  let stats = seeded(PORTRAIT_UP, 0);
+  stats = recordOrientation(stats, { orientation: LANDSCAPE_LEFT, at: 1000, source: 'sensor' });
+  // App is backgrounded 4000ms later: flushDwell() accumulates the running span.
+  const backgrounded = accumulateDwell(stats, 5000);
+  // Simulate the process being killed and storage being re-read from scratch.
+  const revived = normalizeStats(JSON.parse(JSON.stringify(backgrounded)));
+  assert.deepStrictEqual(revived, backgrounded);
+  assert.strictEqual(revived.byOrientation['3'].totalMs, 4000, 'the flushed dwell must not be lost on kill');
+  // Contrast: without the background flush, the still-running span never made
+  // it into byOrientation, so it really would be gone after a kill.
+  const unflushed = normalizeStats(JSON.parse(JSON.stringify(stats)));
+  assert.strictEqual(unflushed.byOrientation['3'].totalMs, 0, 'un-flushed dwell is lost on kill');
+});
+
+test('exportStatsJSON produces parseable JSON matching summarize', () => {
+  let stats = seeded(PORTRAIT_UP, 0);
+  stats = recordOrientation(stats, { orientation: LANDSCAPE_LEFT, at: 1000, source: 'sensor' });
+  const now = 11000;
+  const parsed = JSON.parse(exportStatsJSON(stats, now, true));
+  assert.deepStrictEqual(Object.keys(parsed).sort(), [
+    'app',
+    'events',
+    'exportedAt',
+    'orientations',
+    'totalMs',
+    'totalRotations',
+    'version',
+  ]);
+  assert.strictEqual(parsed.app, 'splash');
+  assert.strictEqual(parsed.version, STATS_VERSION);
+  assert.strictEqual(parsed.exportedAt, now);
+  const summary = summarize(stats, now, true);
+  assert.strictEqual(parsed.totalRotations, summary.totalRotations);
+  assert.strictEqual(parsed.totalMs, summary.totalMs);
+  assert.deepStrictEqual(
+    parsed.orientations.map((o) => [o.orientation, o.count, o.totalMs, o.share]),
+    summary.rows.map((r) => [r.orientation, r.count, r.totalMs, r.share])
+  );
+  assert.deepStrictEqual(parsed.events, summary.events);
+  // buildExportPayload must be the same data exportStatsJSON serializes.
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(buildExportPayload(stats, now, true))), parsed);
 });
 
 console.log(`${passed} tests passed`);

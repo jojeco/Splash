@@ -4,5 +4,5 @@
 - Add haptics (`expo-haptics`) on rotate/lock/unlock for tactile feedback.
 - Animate the `PhoneIndicator` transition between portrait/landscape instead of an instant dimension swap.
 - Replace the emoji glyphs in `constants/orientation.js` / `PhoneIndicator` with proper SVG icons for crisper rendering across devices.
-- Flush dwell time to storage when the app is backgrounded (currently time since the last rotation is lost if the app is killed) and add an opt-in "export stats as JSON" action. Related: for the few frames between stats hydrating and `seed()` running, `summarize()` still uses the previous session's `currentSince`, so the live dwell figure can flash a stale value — gate the panel's live total on "seeded".
+- [x] Flush dwell time to storage when the app is backgrounded, gate the live dwell total on `seeded` so it can't flash a stale figure, and add an opt-in "export stats as JSON" action.
 - Verify the restore-lock path on a real device (saved lock re-applied on launch, logged as `restore`), and add a component test for `StatsPanel` once a RN test runner is set up.

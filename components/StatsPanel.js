@@ -1,15 +1,20 @@
-import React from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, Share, StyleSheet, Text, View } from 'react-native';
 
 import { getEmoji, getLabel } from '../constants/orientation';
-import { formatDuration, summarize } from '../lib/stats';
+import { exportStatsJSON, formatDuration, summarize } from '../lib/stats';
 import RotateButton from './RotateButton';
 
 const RECENT_EVENTS = 5;
+const canShare = Share && typeof Share.share === 'function';
 
 // Toggleable local rotation history. `now` is passed in (rather than read here)
-// so the parent controls when the live dwell figure ticks.
-export default function StatsPanel({ stats, now, visible, onToggle, onReset, storageError }) {
+// so the parent controls when the live dwell figure ticks. `seeded` gates the
+// live dwell total: before the baseline is set, showing a delta against the
+// previous session's currentSince would flash a stale figure.
+export default function StatsPanel({ stats, now, seeded, visible, onToggle, onReset, storageError }) {
+  const [exportText, setExportText] = useState(null);
+
   const confirmReset = () => {
     Alert.alert('Reset stats?', 'This clears your rotation history on this device.', [
       { text: 'Cancel', style: 'cancel' },
@@ -21,7 +26,19 @@ export default function StatsPanel({ stats, now, visible, onToggle, onReset, sto
     return <RotateButton label="Show stats" onPress={onToggle} variant="secondary" />;
   }
 
-  const summary = summarize(stats, now);
+  const toggleExport = () => {
+    setExportText((prev) => (prev == null ? exportStatsJSON(stats, now, seeded) : null));
+  };
+
+  const shareExport = async () => {
+    try {
+      await Share.share({ message: exportText });
+    } catch (err) {
+      Alert.alert('Share failed', 'Could not share the exported stats.');
+    }
+  };
+
+  const summary = summarize(stats, now, seeded);
 
   return (
     <View style={styles.panel}>
@@ -63,8 +80,20 @@ export default function StatsPanel({ stats, now, visible, onToggle, onReset, sto
         ))
       )}
 
+      {exportText ? (
+        <View style={styles.exportBlock}>
+          <Text selectable style={styles.exportText}>
+            {exportText}
+          </Text>
+        </View>
+      ) : null}
+
       <View style={styles.actions}>
         <RotateButton label="Reset stats" onPress={confirmReset} variant="secondary" />
+        <RotateButton label={exportText ? 'Hide export' : 'Export JSON'} onPress={toggleExport} variant="secondary" />
+        {exportText && canShare ? (
+          <RotateButton label="Share…" onPress={shareExport} variant="secondary" />
+        ) : null}
         <RotateButton label="Hide stats" onPress={onToggle} variant="secondary" />
       </View>
     </View>
@@ -130,6 +159,17 @@ const styles = StyleSheet.create({
   event: {
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.85)',
+  },
+  exportBlock: {
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+    borderRadius: 8,
+    padding: 8,
+    marginTop: 8,
+  },
+  exportText: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontFamily: 'monospace',
   },
   actions: {
     alignItems: 'center',
