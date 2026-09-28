@@ -13,11 +13,13 @@ const {
   exportStatsJSON,
   formatDuration,
 } = require('../lib/stats');
+const { getRotationDegrees, nextAngle } = require('../lib/rotation');
 
 const PORTRAIT_UP = 1;
 const PORTRAIT_DOWN = 2;
 const LANDSCAPE_LEFT = 3;
 const LANDSCAPE_RIGHT = 4;
+const UNKNOWN = 0;
 
 let passed = 0;
 function test(name, fn) {
@@ -240,6 +242,46 @@ test('exportStatsJSON produces parseable JSON matching summarize', () => {
   assert.deepStrictEqual(parsed.events, summary.events);
   // buildExportPayload must be the same data exportStatsJSON serializes.
   assert.deepStrictEqual(JSON.parse(JSON.stringify(buildExportPayload(stats, now, true))), parsed);
+});
+
+test('getRotationDegrees maps known orientations, defaulting unknown to 0', () => {
+  assert.strictEqual(getRotationDegrees(UNKNOWN), 0);
+  assert.strictEqual(getRotationDegrees(PORTRAIT_UP), 0);
+  assert.strictEqual(getRotationDegrees(LANDSCAPE_RIGHT), 90);
+  assert.strictEqual(getRotationDegrees(PORTRAIT_DOWN), 180);
+  assert.strictEqual(getRotationDegrees(LANDSCAPE_LEFT), 270);
+  assert.strictEqual(getRotationDegrees(999), 0, 'unhandled orientations default to 0');
+});
+
+test('nextAngle takes the shortest turn to a target', () => {
+  assert.strictEqual(nextAngle(0, 90), 90);
+  assert.strictEqual(nextAngle(270, 0), 360, '270 -> 0 should keep going forward, not spin back through 180');
+  assert.strictEqual(nextAngle(0, 270), -90, '0 -> 270 should go backward, the short way');
+});
+
+test('nextAngle keeps every single step within +/-180 of the previous angle', () => {
+  const targets = [0, 90, 180, 270];
+  let angle = 0;
+  for (let i = 0; i < 40; i += 1) {
+    const prev = angle;
+    angle = nextAngle(angle, targets[i % targets.length]);
+    assert.ok(Math.abs(angle - prev) <= 180, `step ${i}: ${prev} -> ${angle} exceeded 180`);
+  }
+});
+
+test('nextAngle advances exactly one turn per full cycle, never reversing', () => {
+  const targets = [0, 90, 180, 270];
+  let angle = 0;
+  const afterEachCycle = [];
+  for (let cycle = 0; cycle < 5; cycle += 1) {
+    for (const target of targets) angle = nextAngle(angle, target);
+    afterEachCycle.push(angle);
+  }
+  // Every lap around the same four targets should advance the cumulative
+  // angle by exactly one full turn — never more, never less, never reversing.
+  for (let i = 1; i < afterEachCycle.length; i += 1) {
+    assert.strictEqual(afterEachCycle[i] - afterEachCycle[i - 1], 360);
+  }
 });
 
 console.log(`${passed} tests passed`);

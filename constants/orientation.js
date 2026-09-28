@@ -1,7 +1,13 @@
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { Platform } from 'react-native';
+import { getRotationDegrees, nextAngle } from '../lib/rotation';
 
 const { Orientation, OrientationLock } = ScreenOrientation;
+
+// Pure angle math lives in lib/rotation.js (no RN/expo imports) so it can be
+// required directly from the plain-node test runner. Re-exported here so app
+// code only needs to import from this file.
+export { getRotationDegrees, nextAngle };
 
 export const ORIENTATION_LABELS = {
   [Orientation.UNKNOWN]: 'Unknown',

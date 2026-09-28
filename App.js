@@ -119,7 +119,7 @@ export default function App() {
   return (
     <>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
-        <PhoneIndicator orientation={orientation} />
+        <PhoneIndicator orientation={orientation} animate={orientationReady} />
         <Text style={styles.label}>{getLabel(orientation)}</Text>
         <Text style={styles.code}>Orientation code: {orientation}</Text>
         <RotateButton label="Rotate" onPress={rotate} variant="primary" />
