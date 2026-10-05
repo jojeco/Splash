@@ -10,9 +10,16 @@ import StatsPanel from './components/StatsPanel';
 import usePersistentState from './hooks/usePersistentState';
 import useRotationStats from './hooks/useRotationStats';
 import { STORAGE_KEYS } from './lib/storage';
+import { hapticRotate, hapticUnlock, hapticReset } from './lib/haptics';
 
 const SETTINGS_VERSION = 1;
-const DEFAULT_SETTINGS = { version: SETTINGS_VERSION, locked: false, orientationLock: null, showStats: false };
+const DEFAULT_SETTINGS = {
+  version: SETTINGS_VERSION,
+  locked: false,
+  orientationLock: null,
+  showStats: false,
+  hapticsEnabled: true,
+};
 // How long after a restored lock we still attribute orientation changes to it.
 const RESTORE_WINDOW_MS = 1500;
 
@@ -26,6 +33,7 @@ function normalizeSettings(raw) {
     locked: raw.locked === true && lockValid,
     orientationLock: lockValid ? raw.orientationLock : null,
     showStats: raw.showStats === true,
+    hapticsEnabled: raw.hapticsEnabled !== false,
   };
 }
 
@@ -36,7 +44,7 @@ export default function App() {
     DEFAULT_SETTINGS,
     { normalize: normalizeSettings }
   );
-  const { locked, showStats } = settings;
+  const { locked, showStats, hapticsEnabled } = settings;
   const { stats, hydrated: statsHydrated, storageError, record, seed, reset, seeded } = useRotationStats();
   const [orientationReady, setOrientationReady] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -102,6 +110,7 @@ export default function App() {
     restoringRef.current = false;
     ScreenOrientation.lockAsync(lock).catch(() => {});
     setSettings((prev) => ({ ...prev, locked: true, orientationLock: lock }));
+    if (hapticsEnabled) hapticRotate();
   };
 
   const unlock = () => {
@@ -110,10 +119,20 @@ export default function App() {
     restoringRef.current = false;
     ScreenOrientation.unlockAsync().catch(() => {});
     setSettings((prev) => ({ ...prev, locked: false, orientationLock: null }));
+    if (hapticsEnabled) hapticUnlock();
   };
 
   const toggleStats = useCallback(() => {
     setSettings((prev) => ({ ...prev, showStats: !prev.showStats }));
+  }, [setSettings]);
+
+  const handleReset = useCallback(() => {
+    reset();
+    if (hapticsEnabled) hapticReset();
+  }, [reset, hapticsEnabled]);
+
+  const toggleHaptics = useCallback(() => {
+    setSettings((prev) => ({ ...prev, hapticsEnabled: !prev.hapticsEnabled }));
   }, [setSettings]);
 
   return (
@@ -129,13 +148,18 @@ export default function App() {
           disabled={!locked}
           variant="secondary"
         />
+        <RotateButton
+          label={hapticsEnabled ? 'Haptics: On' : 'Haptics: Off'}
+          onPress={toggleHaptics}
+          variant="secondary"
+        />
         <StatsPanel
           stats={stats}
           now={now}
           seeded={seeded}
           visible={showStats}
           onToggle={toggleStats}
-          onReset={reset}
+          onReset={handleReset}
           storageError={storageError}
         />
       </ScrollView>

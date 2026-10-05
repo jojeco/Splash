@@ -8,6 +8,8 @@ export default function RotateButton({ label, onPress, disabled, variant }) {
     <Pressable
       onPress={onPress}
       disabled={disabled}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled }}
       style={({ pressed }) => [
         styles.button,
         isSecondary ? styles.secondary : styles.primary,
