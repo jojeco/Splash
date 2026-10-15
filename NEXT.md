@@ -6,3 +6,5 @@
 - Replace the emoji glyphs in `constants/orientation.js` / `PhoneIndicator` with proper SVG icons for crisper rendering across devices.
 - [x] Flush dwell time to storage when the app is backgrounded, gate the live dwell total on `seeded` so it can't flash a stale figure, and add an opt-in "export stats as JSON" action.
 - Verify the restore-lock path on a real device (saved lock re-applied on launch, logged as `restore`), and add a component test for `StatsPanel` once a RN test runner is set up.
+- [x] Fix a dwell-time bug where returning from background never reset `currentSince`, silently adding background time to whatever orientation was active; added `resumeDwell` (`lib/stats.js`, `hooks/useRotationStats.js`) called on the AppState `active` transition.
+- Fix orientation-change-before-active-event ordering (a sensor event firing between background and the AppState `active` callback can still get mis-credited) — left out of this run.

@@ -8,6 +8,7 @@ const {
   seedOrientation,
   recordOrientation,
   accumulateDwell,
+  resumeDwell,
   summarize,
   buildExportPayload,
   exportStatsJSON,
@@ -198,6 +199,40 @@ test('accumulateDwell is safe to call twice in a row (iOS active->inactive->back
   assert.strictEqual(once.byOrientation['1'].totalMs, 4000);
   assert.strictEqual(twice.byOrientation['1'].totalMs, 4050, 'the second call must only add the extra epsilon, never re-add the whole span');
   assert.strictEqual(twice.currentSince, 5050);
+});
+
+test('resumeDwell stops background time from being added to the old orientation', () => {
+  const start = seeded(PORTRAIT_UP, 1000);
+  const backgrounded = accumulateDwell(start, 5000); // flushDwell() on the way to background
+  const resumed = resumeDwell(backgrounded, 100000); // app returns to foreground much later
+  assert.strictEqual(resumed.byOrientation['1'].totalMs, 4000, 'resumeDwell itself must not touch byOrientation');
+  const rotated = recordOrientation(resumed, { orientation: LANDSCAPE_LEFT, at: 101000, source: 'sensor' });
+  assert.strictEqual(
+    rotated.byOrientation['1'].totalMs,
+    5000,
+    'only real foreground time (1000->5000 and 100000->101000) should count, not the ~95000ms spent backgrounded'
+  );
+});
+
+test('resumeDwell is a no-op without a baseline', () => {
+  const stats = createStats();
+  assert.strictEqual(resumeDwell(stats, 5000), stats);
+});
+
+test('resumeDwell never moves currentSince backward', () => {
+  const stats = seeded(PORTRAIT_UP, 5000);
+  const resumed = resumeDwell(stats, 100);
+  assert.strictEqual(resumed.currentSince, 5000);
+});
+
+test('resumeDwell is idempotent across repeated active events', () => {
+  const stats = seeded(PORTRAIT_UP, 1000);
+  const once = resumeDwell(stats, 2000);
+  const twice = resumeDwell(once, 2000);
+  assert.strictEqual(twice.currentSince, 2000);
+  assert.deepStrictEqual(twice.byOrientation, stats.byOrientation);
+  assert.deepStrictEqual(twice.events, stats.events);
+  assert.strictEqual(twice.totalRotations, stats.totalRotations);
 });
 
 test('dwell flushed at background survives a simulated app kill (JSON round-trip)', () => {

@@ -8,6 +8,7 @@ import {
   createStats,
   normalizeStats,
   recordOrientation,
+  resumeDwell as resumeDwellLib,
   seedOrientation,
 } from '../lib/stats';
 
@@ -59,14 +60,23 @@ export default function useRotationStats() {
     setStats((prev) => accumulateDwell(prev, Date.now()), { immediate: true });
   }, [setStats]);
 
+  // Restarts the dwell clock when the app returns to the foreground, so the
+  // time spent backgrounded (possibly hours) is never silently credited to
+  // whatever orientation was active when the app was backgrounded.
+  const resumeDwell = useCallback(() => {
+    if (!hydratedRef.current || !seededRef.current) return;
+    setStats((prev) => resumeDwellLib(prev, Date.now()));
+  }, [setStats]);
+
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
-      if (state !== 'active') flushDwell();
+      if (state === 'active') resumeDwell();
+      else flushDwell();
     });
     return () => {
       sub.remove();
     };
-  }, [flushDwell]);
+  }, [flushDwell, resumeDwell]);
 
-  return { stats, hydrated, storageError: error, record, seed, reset, flushDwell, seeded };
+  return { stats, hydrated, storageError: error, record, seed, reset, flushDwell, resumeDwell, seeded };
 }
