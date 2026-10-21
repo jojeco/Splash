@@ -24,6 +24,9 @@ export default function useRotationStats() {
   const hydratedRef = useRef(false);
   const seededRef = useRef(false);
   const [seeded, setSeeded] = useState(false);
+  // Tracks foreground/background so a late sensor event never credits
+  // background time to the orientation active when the app was backgrounded.
+  const appActiveRef = useRef(AppState.currentState !== 'background' && AppState.currentState !== 'inactive');
 
   useEffect(() => {
     hydratedRef.current = hydrated;
@@ -32,6 +35,11 @@ export default function useRotationStats() {
   const record = useCallback(
     (orientation, source = 'sensor') => {
       if (!hydratedRef.current || !seededRef.current) return;
+      if (!appActiveRef.current) {
+        const now = Date.now();
+        setStats((prev) => recordOrientation(resumeDwellLib(prev, now), { orientation, at: now, source }));
+        return;
+      }
       setStats((prev) => recordOrientation(prev, { orientation, at: Date.now(), source }));
     },
     [setStats]
@@ -70,6 +78,7 @@ export default function useRotationStats() {
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
+      appActiveRef.current = state === 'active';
       if (state === 'active') resumeDwell();
       else flushDwell();
     });

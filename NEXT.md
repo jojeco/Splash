@@ -7,4 +7,6 @@
 - [x] Flush dwell time to storage when the app is backgrounded, gate the live dwell total on `seeded` so it can't flash a stale figure, and add an opt-in "export stats as JSON" action.
 - Verify the restore-lock path on a real device (saved lock re-applied on launch, logged as `restore`), and add a component test for `StatsPanel` once a RN test runner is set up.
 - [x] Fix a dwell-time bug where returning from background never reset `currentSince`, silently adding background time to whatever orientation was active; added `resumeDwell` (`lib/stats.js`, `hooks/useRotationStats.js`) called on the AppState `active` transition.
-- Fix orientation-change-before-active-event ordering (a sensor event firing between background and the AppState `active` callback can still get mis-credited) — left out of this run.
+- [x] Fix orientation-change-before-active-event ordering: `record()` now checks an `appActiveRef` (kept in sync by the AppState listener) and, when backgrounded/inactive, calls `resumeDwell` with a single captured timestamp before recording, so a sensor event reaching App.js before the `active` callback fires can no longer mis-credit background time to the old orientation (`hooks/useRotationStats.js`).
+- Add a focused test for the `appActiveRef` guard (simulate a sensor event arriving between the `background` and `active` AppState transitions) once a RN test runner is set up.
+- Re-check dwell semantics for the iOS `inactive` state specifically — it's currently treated the same as `background`; confirm that's right on a real device.
