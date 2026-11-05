@@ -7,7 +7,7 @@ import {
   accumulateDwell,
   createStats,
   normalizeStats,
-  recordOrientation,
+  recordOrientationGuarded,
   resumeDwell as resumeDwellLib,
   seedOrientation,
 } from '../lib/stats';
@@ -35,12 +35,9 @@ export default function useRotationStats() {
   const record = useCallback(
     (orientation, source = 'sensor') => {
       if (!hydratedRef.current || !seededRef.current) return;
-      if (!appActiveRef.current) {
-        const now = Date.now();
-        setStats((prev) => recordOrientation(resumeDwellLib(prev, now), { orientation, at: now, source }));
-        return;
-      }
-      setStats((prev) => recordOrientation(prev, { orientation, at: Date.now(), source }));
+      const at = Date.now();
+      const appActive = appActiveRef.current;
+      setStats((prev) => recordOrientationGuarded(prev, { orientation, at, source, appActive }));
     },
     [setStats]
   );

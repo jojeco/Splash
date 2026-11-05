@@ -7,6 +7,7 @@ const {
   normalizeStats,
   seedOrientation,
   recordOrientation,
+  recordOrientationGuarded,
   accumulateDwell,
   resumeDwell,
   summarize,
@@ -233,6 +234,90 @@ test('resumeDwell is idempotent across repeated active events', () => {
   assert.deepStrictEqual(twice.byOrientation, stats.byOrientation);
   assert.deepStrictEqual(twice.events, stats.events);
   assert.strictEqual(twice.totalRotations, stats.totalRotations);
+});
+
+test('recordOrientationGuarded delegates straight to recordOrientation when active', () => {
+  const start = seeded(PORTRAIT_UP, 1000);
+  const guarded = recordOrientationGuarded(start, {
+    orientation: LANDSCAPE_RIGHT,
+    at: 4000,
+    source: 'button',
+    appActive: true,
+  });
+  const plain = recordOrientation(start, { orientation: LANDSCAPE_RIGHT, at: 4000, source: 'button' });
+  assert.deepStrictEqual(guarded, plain);
+});
+
+test('recordOrientationGuarded restarts the dwell clock for a sensor event arriving while backgrounded', () => {
+  let stats = seeded(PORTRAIT_UP, 1000);
+  // App gets backgrounded at t=3000; flushDwell() on the way out accumulates
+  // the running span, just like the real AppState listener would.
+  stats = accumulateDwell(stats, 3000);
+  assert.strictEqual(stats.byOrientation['1'].totalMs, 2000);
+  // A sensor event reaches record() much later (t=50000) before the
+  // AppState 'active' callback has fired, with appActive still false.
+  const guarded = recordOrientationGuarded(stats, {
+    orientation: LANDSCAPE_RIGHT,
+    at: 50000,
+    source: 'sensor',
+    appActive: false,
+  });
+  assert.strictEqual(guarded.byOrientation['1'].totalMs, 2000, 'the ~47s background gap must not inflate portrait dwell');
+  assert.strictEqual(guarded.currentOrientation, LANDSCAPE_RIGHT);
+  assert.strictEqual(guarded.currentSince, 50000);
+});
+
+test('contrast: calling recordOrientation directly in the same scenario WOULD mis-credit the background gap', () => {
+  let stats = seeded(PORTRAIT_UP, 1000);
+  stats = accumulateDwell(stats, 3000);
+  const unguarded = recordOrientation(stats, { orientation: LANDSCAPE_RIGHT, at: 50000, source: 'sensor' });
+  assert.strictEqual(
+    unguarded.byOrientation['1'].totalMs,
+    49000,
+    'without the guard, the full backgrounded gap gets credited to the old orientation'
+  );
+  const guarded = recordOrientationGuarded(stats, {
+    orientation: LANDSCAPE_RIGHT,
+    at: 50000,
+    source: 'sensor',
+    appActive: false,
+  });
+  assert.strictEqual(guarded.byOrientation['1'].totalMs, 2000, 'the guard prevents that mis-credit');
+});
+
+test('recordOrientationGuarded is a same-reference no-op for duplicates/UNKNOWN while backgrounded', () => {
+  const start = seeded(PORTRAIT_UP, 1000);
+  assert.strictEqual(
+    recordOrientationGuarded(start, { orientation: PORTRAIT_UP, at: 50000, source: 'sensor', appActive: false }),
+    start
+  );
+  assert.strictEqual(
+    recordOrientationGuarded(start, { orientation: UNKNOWN, at: 50000, source: 'sensor', appActive: false }),
+    start
+  );
+});
+
+test('recordOrientationGuarded seeds correctly with no prior baseline', () => {
+  const out = recordOrientationGuarded(createStats(), {
+    orientation: LANDSCAPE_LEFT,
+    at: 500,
+    source: 'sensor',
+    appActive: false,
+  });
+  assert.strictEqual(out.currentOrientation, LANDSCAPE_LEFT);
+  assert.strictEqual(out.totalRotations, 0);
+});
+
+test('recordOrientationGuarded never produces negative dwell for a backward clock', () => {
+  const start = seeded(PORTRAIT_UP, 5000);
+  const out = recordOrientationGuarded(start, {
+    orientation: LANDSCAPE_RIGHT,
+    at: 100,
+    source: 'sensor',
+    appActive: false,
+  });
+  assert.ok(out.byOrientation['1'].totalMs >= 0);
+  assert.ok(out.currentSince >= 5000);
 });
 
 test('dwell flushed at background survives a simulated app kill (JSON round-trip)', () => {
