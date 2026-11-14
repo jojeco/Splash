@@ -91,10 +91,39 @@ test('normalizeStats drops a half-specified current marker', () => {
   assert.strictEqual(out.currentSince, null);
 });
 
+test('normalizeStats rejects out-of-range orientation codes', () => {
+  const out = normalizeStats({
+    version: 1,
+    byOrientation: {
+      '1': { count: 1, totalMs: 100 },
+      '5': { count: 1, totalMs: 100 },
+    },
+    events: [
+      { from: 1, to: 2, at: 5, source: 'sensor' },
+      { from: 5, to: 2, at: 6, source: 'sensor' },
+      { from: 1, to: 5, at: 7, source: 'sensor' },
+    ],
+    currentOrientation: 7,
+    currentSince: 10,
+  });
+  assert.deepStrictEqual(Object.keys(out.byOrientation).sort(), ['1']);
+  assert.strictEqual(out.events.length, 1);
+  assert.strictEqual(out.currentOrientation, null);
+  assert.strictEqual(out.currentSince, null);
+});
+
 test('recordOrientation is a no-op for duplicates and UNKNOWN', () => {
   const base = seeded(PORTRAIT_UP);
   assert.strictEqual(recordOrientation(base, { orientation: PORTRAIT_UP, at: 2000, source: 'sensor' }), base);
   assert.strictEqual(recordOrientation(base, { orientation: 0, at: 2000, source: 'sensor' }), base);
+});
+
+test('recordOrientation and seedOrientation ignore out-of-range codes', () => {
+  const base = seeded(PORTRAIT_UP, 0);
+  assert.strictEqual(recordOrientation(base, { orientation: 5, at: 1000, source: 'sensor' }), base);
+  assert.strictEqual(base.totalRotations, 0);
+  const fresh = createStats();
+  assert.strictEqual(seedOrientation(fresh, 5, 0), fresh);
 });
 
 test('the first reading without a baseline seeds instead of rotating', () => {
